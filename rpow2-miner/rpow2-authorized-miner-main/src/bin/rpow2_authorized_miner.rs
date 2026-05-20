@@ -19,13 +19,8 @@ struct Cli {
     #[arg(long, default_value = "http://localhost:3000")]
     api_base: String,
 
-    /// Session cookie (rpow_session=... atau sid=...)
     #[arg(long, env = "RPOW2_COOKIE")]
     cookie: String,
-
-    /// Cloudflare clearance cookie (cf_clearance=...)
-    #[arg(long, env = "RPOW2_CF_COOKIE", default_value = "")]
-    cf_cookie: String,
 
     #[arg(long)]
     allow_production: bool,
@@ -132,12 +127,13 @@ struct Rpow2Client {
     cookie: String,
     http: reqwest::Client,
 }
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     validate_api_base(&cli.api_base, cli.allow_production)?;
 
-    let client = Rpow2Client::new(cli.api_base, cli.cookie, cli.cf_cookie)?;
+    let client = Rpow2Client::new(cli.api_base, cli.cookie)?;
     let threads = cli.threads.unwrap_or_else(default_threads);
     let min_delay = Duration::from_millis(cli.min_delay_ms);
     let mint_retry_delay = Duration::from_millis(cli.mint_retry_delay_ms);
@@ -341,58 +337,20 @@ async fn mint_with_retry(
 }
 
 impl Rpow2Client {
-    fn new(api_base: String, cookie: String, cf_cookie: String) -> anyhow::Result<Self> {
+    fn new(api_base: String, cookie: String) -> anyhow::Result<Self> {
         if cookie.trim().is_empty() {
             bail!("--cookie or RPOW2_COOKIE must be provided");
         }
 
-        // Gabungkan session cookie + CF clearance cookie jadi satu header
-        let combined_cookie = if cf_cookie.trim().is_empty() {
-            cookie.clone()
-        } else {
-            format!("{}; {}", cookie.trim_end_matches(';').trim(), cf_cookie.trim())
-        };
-
         let api_base = api_base.trim_end_matches('/').to_string();
         let http = reqwest::Client::builder()
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
-            .default_headers({
-                let mut headers = reqwest::header::HeaderMap::new();
-                headers.insert(
-                    reqwest::header::ACCEPT,
-                    "application/json, text/plain, */*".parse().unwrap(),
-                );
-                headers.insert(
-                    reqwest::header::ACCEPT_LANGUAGE,
-                    "en-US,en;q=0.9".parse().unwrap(),
-                );
-                headers.insert(
-                    reqwest::header::ORIGIN,
-                    "https://rpow2.com".parse().unwrap(),
-                );
-                headers.insert(
-                    reqwest::header::REFERER,
-                    "https://rpow2.com/".parse().unwrap(),
-                );
-                headers.insert(
-                    "sec-ch-ua",
-                    r#""Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24""#
-                        .parse()
-                        .unwrap(),
-                );
-                headers.insert("sec-ch-ua-mobile", "?0".parse().unwrap());
-                headers.insert("sec-ch-ua-platform", r#""Windows""#.parse().unwrap());
-                headers.insert("sec-fetch-dest", "empty".parse().unwrap());
-                headers.insert("sec-fetch-mode", "cors".parse().unwrap());
-                headers.insert("sec-fetch-site", "same-site".parse().unwrap());
-                headers
-            })
+            .user_agent("rpow2-authorized-miner/0.1")
             .build()
             .context("failed to build HTTP client")?;
 
         Ok(Self {
             api_base,
-            cookie: combined_cookie,
+            cookie,
             http,
         })
     }
@@ -616,7 +574,7 @@ mod tests {
             }
         });
 
-        let client = Rpow2Client::new(server.base_url(), "sid=test".to_string(), String::new()).unwrap();
+        let client = Rpow2Client::new(server.base_url(), "sid=test".to_string()).unwrap();
         let me = client.me().await.unwrap();
         assert_eq!(me.email, "owner@example.com");
         assert_eq!(me.balance_base_units().unwrap(), "1000000000");
@@ -639,7 +597,7 @@ mod tests {
             }
         });
 
-        let client = Rpow2Client::new(server.base_url(), "sid=test".to_string(), String::new()).unwrap();
+        let client = Rpow2Client::new(server.base_url(), "sid=test".to_string()).unwrap();
         let me = client.me().await.unwrap();
         assert_eq!(me.email, "owner@example.com");
         assert_eq!(me.balance_base_units().unwrap(), "1234567890");
@@ -658,7 +616,7 @@ mod tests {
             }
         });
 
-        let client = Rpow2Client::new(server.base_url(), "sid=test".to_string(), String::new()).unwrap();
+        let client = Rpow2Client::new(server.base_url(), "sid=test".to_string()).unwrap();
         let me = client.me().await.unwrap();
         assert_eq!(me.email, "owner@example.com");
         assert_eq!(me.balance_base_units().unwrap(), "1");
@@ -713,7 +671,7 @@ mod tests {
             }
         });
 
-        let client = Rpow2Client::new(server.base_url(), "sid=test".to_string(), String::new()).unwrap();
+        let client = Rpow2Client::new(server.base_url(), "sid=test".to_string()).unwrap();
         let error = run_round(&client, 1, 1, 2, Duration::from_millis(1))
             .await
             .unwrap_err();
@@ -744,7 +702,7 @@ mod tests {
             }
         });
 
-        let client = Rpow2Client::new(server.base_url(), "sid=bad".to_string(), String::new()).unwrap();
+        let client = Rpow2Client::new(server.base_url(), "sid=bad".to_string()).unwrap();
         let error = run_round(&client, 1, 1, 2, Duration::from_millis(1))
             .await
             .unwrap_err();
@@ -772,7 +730,7 @@ mod tests {
             }
         });
 
-        let client = Rpow2Client::new(server.base_url(), "sid=bad".to_string(), String::new()).unwrap();
+        let client = Rpow2Client::new(server.base_url(), "sid=bad".to_string()).unwrap();
         let error = client.me().await.unwrap_err();
         let api_error = error.downcast_ref::<ApiError>().unwrap();
         assert_eq!(api_error.status, StatusCode::UNAUTHORIZED);
@@ -789,7 +747,7 @@ mod tests {
             }
         });
 
-        let client = Rpow2Client::new(server.base_url(), "sid=test".to_string(), String::new()).unwrap();
+        let client = Rpow2Client::new(server.base_url(), "sid=test".to_string()).unwrap();
         let error = client.challenge().await.unwrap_err();
         let api_error = error.downcast_ref::<ApiError>().unwrap();
         assert_eq!(api_error.status, StatusCode::TOO_MANY_REQUESTS);

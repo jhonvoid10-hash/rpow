@@ -32,34 +32,19 @@ cargo +1.88.0 run --release --bin rpow2_authorized_miner -- --help
 
 ## Cookie Setup
 
-Miner membutuhkan session cookie dari RPOW2. Jika situs dilindungi Cloudflare, kamu juga perlu menyertakan cookie `cf_clearance`.
-
-### Cara Ambil Cookie dari Browser
-
-1. Buka https://rpow2.com di browser dan **login**
-2. Tekan `F12` → tab **Application** (Chrome/Edge) atau **Storage** (Firefox)
-3. Klik **Cookies** → pilih `https://rpow2.com`
-4. Cari dan copy nilai dari:
-   - `rpow_session` (atau `sid`) → untuk `RPOW2_COOKIE`
-   - `cf_clearance` → untuk `RPOW2_CF_COOKIE` (jika ada)
-
-### Set Environment Variable
+Use a temporary environment variable. Replace the placeholder with your explicit session cookie.
 
 macOS/Linux:
 
 ```bash
-export RPOW2_COOKIE='rpow_session=NILAI_COOKIE_DISINI'
-export RPOW2_CF_COOKIE='cf_clearance=NILAI_CF_DISINI'
+export RPOW2_COOKIE='rpow_session=...'
 ```
 
 Windows PowerShell:
 
 ```powershell
-$env:RPOW2_COOKIE = 'rpow_session=NILAI_COOKIE_DISINI'
-$env:RPOW2_CF_COOKIE = 'cf_clearance=NILAI_CF_DISINI'
+$env:RPOW2_COOKIE = 'rpow_session=...'
 ```
-
-> **Catatan:** `RPOW2_CF_COOKIE` bersifat opsional. Jika tidak ada Cloudflare, cukup set `RPOW2_COOKIE` saja.
 
 Do not paste real cookies into public issues, logs, README files, or shell history you plan to share.
 
